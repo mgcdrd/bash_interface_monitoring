@@ -12,8 +12,8 @@
 #==========================================================
 INTERFACE_FILE=/tmp/interface_file.$$
 PORTS_FILE=/tmp/ports_file.$$
-PUPPET_DIR=/etc/puppet/scripts
-#PUPPET_DIR=/etc/puppetlabs/puppet/scripts
+#PUPPET_DIR=/etc/puppet/scripts
+PUPPET_DIR=/etc/puppetlabs/puppet/scripts
 LOG_FILE=/var/log/if_monitor.log
 
 
@@ -23,7 +23,7 @@ LOG_FILE=/var/log/if_monitor.log
 capture_interfaces() {
    echo "$(date +'%b %d %X') - gathering interfaces" >> ${LOG_FILE}
    ifconfig -a | egrep "^[0-9a-z]{3,7}" | grep -v "lo"| awk '{print $1}' | awk -F: "{print $1}" > ${INTERFACE_FILE} 2> /dev/null
-   if [ grep -c ":" ${INTERFACE_FILE} ]; then
+   if [ `grep -c ":" ${INTERFACE_FILE}` ]; then
       sed -i "s/:/ /g" ${INTERFACE_FILE}
    fi
 }
@@ -46,8 +46,8 @@ spawn_tcpdumps() {
       while read prts; do
              echo "$(date +'%b %d %X') - starting tcpdump for $inter:$prts" >> ${LOG_FILE}
              # timeout spawns tcpdump with a time limit.  tcpdump only has -c for packet count...if none are
-			 #     collected, the tcpdump doesn't close
-			 timeout 31m tcpdump -s 0 -i $inter port $prts 1> /tmp/$inter_$prts_$(date +%F) 2> /dev/null &
+                         #     collected, the tcpdump doesn't close
+                         timeout 31m tcpdump -s 0 -i $inter port $prts 1> /tmp/$inter_$prts_$(date +%F) 2> /dev/null &
           done < ${PORTS_FILE}
    done < ${INTERFACE_FILE}
 }
@@ -74,7 +74,7 @@ check_previous(){
                  fi
                  #if the if statements ran, remove localhost IPs and save to a puppet file
                  if [ -f /tmp/tcp_parsed.$$ ]; then
-                    echo  "$(date +'%b %d %X') - consolidating capture details to $PUPPET_DIR/net_services_ready"  >> ${LOG_FILE}
+                    echo  "$(date +'%b %d %X') - consolidating capture details to ${PUPPET_DIR}/net_services_ready"  >> ${LOG_FILE}
                     ifconfig -a | egrep "inet" | egrep -v "inet6" | awk '{print $2}' > /tmp/ip_addr
                         while read lines; do
                             sed '/$lines/d' /tmp/ip_addr >> /tmp/tcp_host_removed
@@ -98,11 +98,15 @@ final_doc_cleanup() {
    if [ -f ${PUPPET_DIR}/net_services ]; then
       cat ${PUPPET_DIR}/net_services | sort | uniq > ${PUPPET_DIR}/interfaces_ready
       rm -rf ${PUPPET_DIR}/net_services
-	  while read inter; do
-	     sed -i '/${inter}/d' ${PUPPET_DIR}/interfaces_ready
-	  done < ${INTERFACE_FILE}
+         OIFS=$IFS
+         IFS=' '
+         for inter in `hostname -I`; do
+             sed -i "/$inter/d" ${PUPPET_DIR}/interfaces_ready
+         done
+         sed -i '/127.0.0.1/d' ${PUPPET_DIR}/interfaces_ready
+         IFS=$OIFS
    fi
-   rm -rf ${INTERFACE_FILE} 
+   rm -rf ${INTERFACE_FILE}
    rm -rf ${PORTS_FILE}
 }
 
